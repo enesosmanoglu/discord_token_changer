@@ -1,0 +1,16 @@
+{
+  "name": "discord_token_changer",
+  "version": "1.0.2",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "enesosmanoglu",
+  "license": "ISC",
+  "dependencies": {
+    "level": "^6.0.1",
+    "ps-list": "^7.2.0"
+  }
+}
