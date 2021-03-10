@@ -4,11 +4,26 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "enesosmanoglu",
+  "keywords": [
+    "discord",
+    "token"
+  ],
+  "author": {
+    "name": "Enes Osmanoğlu",
+    "email": "enesosmanoglu@gmail.com"
+  },
   "license": "ISC",
+  "homepage": "https://github.com/enesosmanoglu/discord_token_changer#readme",
+  "bugs": {
+    "url": "https://github.com/enesosmanoglu/discord_token_changer/issues",
+    "email": "enesosmanoglu@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enesosmanoglu/discord_token_changer.git"
+  },
   "dependencies": {
     "level": "^6.0.1",
     "ps-list": "^7.2.0"
