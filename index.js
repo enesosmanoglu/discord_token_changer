@@ -9,12 +9,20 @@ let keyPrefix, valuePrefix;
 
 let localAppDataPath = process.env.LOCALAPPDATA || (process.platform == 'darwin' ? '/Library/Application Support' : "/usr/bin/");
 let appDataPath = process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Preferences' : process.env.HOME + "/.local/share");
-let dbPath = path.join(appDataPath, 'Discord', 'Local Storage', 'leveldb');
+
+let discordType = 'Discord';
+let dbPath = path.join(appDataPath, discordType, 'Local Storage', 'leveldb');
+
+function changeDiscordType(newType) {
+    discordType = newType;
+    dbPath = path.join(appDataPath, discordType, 'Local Storage', 'leveldb');
+    return discordType;
+}
 
 async function getDiscordProcess() {
     let tasklist = await psList();
     //=> [{pid: 3213, name: 'node', cmd: 'node test.js', ppid: 1, uid: 501, cpu: 0.1, memory: 1.5}, …]
-    let dclist = tasklist.filter(t => t.name == "Discord.exe");
+    let dclist = tasklist.filter(t => t.name == (discordType + ".exe"));
     return dclist;
 }
 async function isDiscordOpen() {
@@ -39,7 +47,7 @@ async function checkIsDiscordOpen(retry = 3) {
 function startDiscord() {
     console.error("Starting Discord app.");
     return new Promise(async (resolve, reject) => {
-        exec(path.join(localAppDataPath, 'Discord', 'Update.exe') + ' --processStart Discord.exe', (err, out, code) => {
+        exec(path.join(localAppDataPath, discordType, 'Update.exe') + ' --processStart ' + discordType + '.exe', (err, out, code) => {
             if (err)
                 return reject(err);
 
@@ -87,9 +95,9 @@ function changeToken(token) {
 
             db.createReadStream()
                 .on('data', function (data) {
-                    if (data.key.endsWith("gatewayURL")) {
-                        keyPrefix = data.key.replace("gatewayURL", "");
-                        valuePrefix = data.value.split('"')[0];
+                    if (data.key.endsWith("notifications") && data.key.includes("discord.com")) {
+                        keyPrefix = data.key.replace("notifications", "");
+                        valuePrefix = data.value.split('{')[0];
                     }
                 })
                 .on('error', function (err) {
@@ -97,7 +105,12 @@ function changeToken(token) {
                     reject(err);
                 })
                 .on('end', async function () {
-                    //console.log(keyPrefix, valuePrefix)
+                    console.log("-----------------")
+                    console.log("key:")
+                    console.log(keyPrefix)
+                    console.log("\nvalue:")
+                    console.log(valuePrefix)
+                    console.log("-----------------")
                     if (!keyPrefix || !valuePrefix) {
                         console.log("Restarting Discord app.")
                         await startDiscord();
@@ -110,8 +123,8 @@ function changeToken(token) {
                         db.get(keyPrefix + 'token', async function (err, value) {
                             if (err) {
                                 if (err.message.includes("Key not found")) {
-                                    await startDiscord();
-                                    reject("Please login any account on Discord app firstly!");
+                                    console.log("No token found! Inserting new one.")
+                                    dbSet("token", `"${token}"`)
                                 } else {
                                     //console.log('Ooops!', err.message) // likely the key was not found
                                     reject(err);
@@ -128,6 +141,17 @@ function changeToken(token) {
                             if (value != token) {
                                 console.log("Changing token...")
                                 dbSet("token", `"${token}"`)
+                            }
+                            else {
+                                console.log("Didn't change - Same token found!")
+                                db.close().then(async () => {
+                                    if (db.isClosed()) {
+                                        await startDiscord();
+                                        resolve(true);
+                                    } else {
+                                        reject("Database couldn't closed. Please try again...")
+                                    }
+                                }).catch(reject)
                             }
                         })
                     }
@@ -169,6 +193,7 @@ function changeToken(token) {
 }
 
 module.exports = {
+    changeDiscordType,
     getDiscordProcess,
     isDiscordOpen,
     checkIsDiscordOpen,
