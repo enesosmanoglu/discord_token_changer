@@ -1,28 +1,42 @@
 const fs = require('fs');
 const path = require('path');
 const { exec, } = require("child_process");
-
 const level = require('level');
 const psList = require('ps-list');
-
-let keyPrefix, valuePrefix;
 
 let localAppDataPath = process.env.LOCALAPPDATA || (process.platform == 'darwin' ? '/Library/Application Support' : "/usr/bin/");
 let appDataPath = process.env.APPDATA || (process.platform == 'darwin' ? process.env.HOME + '/Library/Preferences' : process.env.HOME + "/.local/share");
 
-let discordType = 'Discord';
-let dbPath = path.join(appDataPath, discordType, 'Local Storage', 'leveldb');
+/** @type {'Discord'|'DiscordPTB'|'DiscordCanary'|'DiscordDevelopment'} */
+let _type = 'Discord';
+let db = {
+    keyPrefix: '',
+    valuePrefix: '',
+    get path() {
+        path.join(appDataPath, db.type.toLowerCase(), 'Local Storage', 'leveldb');
+    },
+    get type() {
+        return _type;
+    },
+    set type(newType) {
+        if (newType == 'DiscordPTB' || newType == 'DiscordCanary' || newType == 'DiscordDevelopment') {
+            _type = newType;
+        } else {
+            _type = 'Discord';
+        }
+    },
+}
 
+/** @param {'Discord'|'DiscordPTB'|'DiscordCanary'|'DiscordDevelopment'} newType */
 function changeDiscordType(newType) {
-    discordType = newType;
-    dbPath = path.join(appDataPath, discordType, 'Local Storage', 'leveldb');
-    return discordType;
+    db.type = newType;
+    return db.type;
 }
 
 async function getDiscordProcess() {
     let tasklist = await psList();
     //=> [{pid: 3213, name: 'node', cmd: 'node test.js', ppid: 1, uid: 501, cpu: 0.1, memory: 1.5}, …]
-    let dclist = tasklist.filter(t => t.name == (discordType + ".exe"));
+    let dclist = tasklist.filter(t => t.name == (db.type + ".exe"));
     return dclist;
 }
 async function isDiscordOpen() {
@@ -47,7 +61,7 @@ async function checkIsDiscordOpen(retry = 3) {
 function startDiscord() {
     console.error("Starting Discord app.");
     return new Promise(async (resolve, reject) => {
-        exec(path.join(localAppDataPath, discordType, 'Update.exe') + ' --processStart ' + discordType + '.exe', (err, out, code) => {
+        exec(path.join(localAppDataPath, db.type, 'Update.exe') + ' --processStart ' + db.type + '.exe', (err, out, code) => {
             if (err)
                 return reject(err);
 
@@ -58,7 +72,7 @@ function startDiscord() {
     })
 }
 function stopDiscord() {
-    console.error("Stopping Discord app.");
+    console.error("Stopping", db.type, "app.");
     return new Promise(async (resolve, reject) => {
         let dclist = await getDiscordProcess();
         let res = [];
@@ -80,7 +94,7 @@ function changeToken(token) {
         if (!token || token.length < 59)
             return reject("Please insert a valid token!")
 
-        level(dbPath, {}, async (err, db) => {
+        level(db.path, {}, async (err, db) => {
             if (err) {
                 if (err.message.startsWith("IO error: LockFile")) {
                     await stopDiscord()
@@ -96,8 +110,8 @@ function changeToken(token) {
             db.createReadStream()
                 .on('data', function (data) {
                     if (data.key.endsWith("notifications") && data.key.includes("discord.com")) {
-                        keyPrefix = data.key.replace("notifications", "");
-                        valuePrefix = data.value.split('{')[0];
+                        db.keyPrefix = data.key.replace("notifications", "");
+                        db.valuePrefix = data.value.split('{')[0];
                     }
                 })
                 .on('error', function (err) {
@@ -107,12 +121,12 @@ function changeToken(token) {
                 .on('end', async function () {
                     console.log("-----------------")
                     console.log("key:")
-                    console.log(keyPrefix)
+                    console.log(db.keyPrefix)
                     console.log("\nvalue:")
-                    console.log(valuePrefix)
+                    console.log(db.valuePrefix)
                     console.log("-----------------")
-                    if (!keyPrefix || !valuePrefix) {
-                        console.log("Restarting Discord app.")
+                    if (!db.keyPrefix || !db.valuePrefix) {
+                        console.log("Restarting", db.type, "app.")
                         await startDiscord();
                         await stopDiscord();
                     }
@@ -120,7 +134,7 @@ function changeToken(token) {
                     getToken();
 
                     function getToken() {
-                        db.get(keyPrefix + 'token', async function (err, value) {
+                        db.get(db.keyPrefix + 'token', async function (err, value) {
                             if (err) {
                                 if (err.message.includes("Key not found")) {
                                     console.log("No token found! Inserting new one.")
@@ -131,7 +145,7 @@ function changeToken(token) {
                                 }
                                 return
                             }
-                            value = value.replace(valuePrefix, "").replace(/"/g, "");
+                            value = value.replace(db.valuePrefix, "").replace(/"/g, "");
 
                             // Ta da!
                             //console.log('TOKEN FOUND!');
@@ -158,20 +172,20 @@ function changeToken(token) {
                 })
 
             function dbSet(key, value) {
-                db.put(keyPrefix + key, valuePrefix + value, function (err) {
+                db.put(db.keyPrefix + key, db.valuePrefix + value, function (err) {
                     if (err) {
                         //console.log('Ooops!', err.message) // some kind of I/O error;
                         reject(err);
                         return;
                     }
-                    db.get(keyPrefix + key, function (err, valueN) {
+                    db.get(db.keyPrefix + key, function (err, valueN) {
                         if (err) {
                             //console.log('Ooops!', err.message) // likely the key was not found
                             reject(err);
                             return;
                         }
 
-                        valueN = valueN.replace(valuePrefix, "");
+                        valueN = valueN.replace(db.valuePrefix, "");
 
                         // Ta da!
                         console.log(valueN == value ? "[OK]" : "[FAIL]", key, '=', value)
