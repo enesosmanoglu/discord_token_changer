@@ -13,7 +13,7 @@ let db = {
     keyPrefix: '',
     valuePrefix: '',
     get path() {
-        path.join(appDataPath, db.type.toLowerCase(), 'Local Storage', 'leveldb');
+        return path.join(appDataPath, _type.toLowerCase(), 'Local Storage', 'leveldb');
     },
     get type() {
         return _type;
